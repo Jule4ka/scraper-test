@@ -27,8 +27,10 @@ jobs:
         python-version: '3.10'
     - name: Install all necessary packages
       run: pip install jupyter lxml pandas requests beautifulsoup4 html5lib
-    - name: Scraping today's data
-      run: jupyter nbconvert --to notebook --execute "El Pais.ipynb" --stdout
+    - name: Scraping relevant data lrt_lt
+      run: jupyter nbconvert --to notebook --execute "lrt_lt.ipynb" --stdout
+    - name: Scrapting relevant data el pais
+      run: jupyter nbconvert --to notebook --execute "el_pais.ipynb" --stdout
     - name: Commit and push any changes
       run: |-
         git config user.name "Automated"
