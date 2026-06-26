@@ -1,16 +1,34 @@
 # scrape.py — run with:  python scrape.py
 # Fetches the LSM homepage (gets past Cloudflare via stealth) and
 # saves the rendered HTML to lsm_page.html for the notebook to parse.
-from playwright.sync_api import sync_playwright
+import sys
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 from playwright_stealth import Stealth
 
 URL = "https://eng.lsm.lv/"
 
+# headless=True is REQUIRED here: this runs unattended on a server/CI with no
+# display, so a headed window would crash the browser before navigation.
 with Stealth().use_sync(sync_playwright()) as p:
-    browser = p.chromium.launch(headless=True)   # visible window clears CF best
+    browser = p.chromium.launch(headless=True)
     page = browser.new_page()
-    page.goto(URL, wait_until="domcontentloaded")
-    page.wait_for_selector(".list-article", timeout=40000)   # waits out the challenge
+    try:
+        # "commit" returns as soon as the response arrives, so a Cloudflare
+        # interstitial can't stall navigation past the timeout; then we wait
+        # for the real content selector to appear after the challenge clears.
+        page.goto(URL, wait_until="commit", timeout=40000)
+        page.wait_for_selector(".list-article", timeout=40000)   # waits out the challenge
+    except PWTimeout:
+        # Most likely a Cloudflare challenge we didn't clear. Dump what we got
+        # so the block page is inspectable instead of failing blind.
+        page.screenshot(path="lsm_debug.png", full_page=True)
+        with open("lsm_debug.html", "w", encoding="utf-8") as f:
+            f.write(page.content())
+        print(f"FAILED: '.list-article' never appeared. Page title: {page.title()!r}",
+              file=sys.stderr)
+        print("Wrote lsm_debug.html + lsm_debug.png for inspection.", file=sys.stderr)
+        browser.close()
+        sys.exit(1)
     html = page.content()
     browser.close()
 
